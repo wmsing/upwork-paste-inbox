@@ -57,10 +57,23 @@ abstract final class S {
   static final originalLangEn = bi('EN', '英文');
   static final originalLangZh = bi('ZH', '中文');
   static final translateToZh = bi('Translate to 中文', '翻译成中文');
+  static final proposalDraftTitle = bi('Draft title', '草稿标题');
+  static final proposalDraftBody = bi('Cover letter', '提案正文');
+  static final newProposalDraft = bi('New draft', '新建草稿');
+  static final saveProposalDraft = bi('Save draft', '保存草稿');
+  static final deleteProposalDraft = bi('Delete draft', '删除草稿');
+  static final deleteProposalDraftConfirm =
+      bi('Delete this proposal draft?', '删除这条提案草稿？');
+  static final proposalDraftEmpty = bi(
+    'No proposal drafts yet.\nTap New draft to start your Upwork cover letter.',
+    '还没有提案草稿。\n点「新建草稿」开始写 Cover letter。',
+  );
+  static final copyProposalDraft = bi('Copy draft', '复制草稿');
   static String translateFailed(Object e) =>
       bi('Translation failed: $e', '翻译失败: $e');
   static final tabSummary = bi('Summary', '摘要');
   static final tabOriginal = bi('Original', '原文');
+  static final tabProposal = bi('Proposal', '提案');
   static final summaryEmpty =
       bi('Tap Analyze to generate summary', '点「分析」生成摘要');
   static final skipReason = bi('Skip reason', '跳过原因');

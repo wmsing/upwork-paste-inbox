@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import 'job.dart';
 import 'posting_clean.dart';
+import 'proposal.dart';
 
 const _uuid = Uuid();
 
@@ -22,7 +23,7 @@ class JobStore {
     final db = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: (db, _) async {
           await db.execute('''
             CREATE TABLE jobs (
@@ -47,6 +48,7 @@ class JobStore {
               updated_at INTEGER NOT NULL
             )
           ''');
+          await _createProposalDraftsTable(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
@@ -62,6 +64,9 @@ class JobStore {
           }
           if (oldVersion < 5) {
             await db.execute('ALTER TABLE jobs ADD COLUMN body_zh TEXT');
+          }
+          if (oldVersion < 6) {
+            await _createProposalDraftsTable(db);
           }
         },
       ),
@@ -137,6 +142,62 @@ class JobStore {
     await _db.delete('jobs', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<List<ProposalDraft>> listProposalDrafts(String jobId) async {
+    final rows = await _db.query(
+      'proposal_drafts',
+      where: 'job_id = ?',
+      whereArgs: [jobId],
+      orderBy: 'updated_at DESC',
+    );
+    return rows.map(ProposalDraft.fromRow).toList();
+  }
+
+  Future<ProposalDraft> insertProposalDraft({
+    required String jobId,
+    String? title,
+    String? body,
+  }) async {
+    final now = DateTime.now();
+    final t = title?.trim();
+    final draft = ProposalDraft(
+      id: _uuid.v4(),
+      jobId: jobId,
+      title: t != null && t.isNotEmpty ? t : defaultProposalTitle(),
+      body: body ?? '',
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _db.insert('proposal_drafts', _proposalRow(draft));
+    return draft;
+  }
+
+  Future<void> saveProposalDraft(ProposalDraft draft) async {
+    final title = draft.title.trim();
+    await _db.update(
+      'proposal_drafts',
+      {
+        'title': title.isEmpty ? defaultProposalTitle() : title,
+        'body': draft.body,
+        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [draft.id],
+    );
+  }
+
+  Future<void> deleteProposalDraft(String id) async {
+    await _db.delete('proposal_drafts', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Map<String, Object?> _proposalRow(ProposalDraft d) => {
+        'id': d.id,
+        'job_id': d.jobId,
+        'title': d.title,
+        'body': d.body,
+        'created_at': d.createdAt.millisecondsSinceEpoch,
+        'updated_at': d.updatedAt.millisecondsSinceEpoch,
+      };
+
   Map<String, Object?> _toRow(Job job) => {
         'id': job.id,
         'display_title': job.displayTitle,
@@ -160,6 +221,22 @@ class JobStore {
         'created_at': job.createdAt.millisecondsSinceEpoch,
         'updated_at': job.updatedAt.millisecondsSinceEpoch,
       };
+}
+
+Future<void> _createProposalDraftsTable(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS proposal_drafts (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  ''');
+  await db.execute(
+    'CREATE INDEX IF NOT EXISTS idx_proposal_drafts_job ON proposal_drafts(job_id)',
+  );
 }
 
 extension JobCopy on Job {

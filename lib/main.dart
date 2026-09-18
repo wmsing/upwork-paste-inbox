@@ -5,6 +5,7 @@ import 'job.dart';
 import 'l10n.dart';
 import 'ollama.dart';
 import 'posting_clean.dart';
+import 'proposal.dart';
 import 'saved_searches.dart';
 import 'settings.dart';
 import 'store.dart';
@@ -465,11 +466,13 @@ class JobDetailPage extends StatefulWidget {
   State<JobDetailPage> createState() => _JobDetailPageState();
 }
 
-class _JobDetailPageState extends State<JobDetailPage> {
+class _JobDetailPageState extends State<JobDetailPage>
+    with SingleTickerProviderStateMixin {
   Job? _job;
   bool _analyzing = false;
   bool _translatingBody = false;
   bool _originalInZh = false;
+  TabController? _contentTabs;
   late final TextEditingController _titleCtrl;
   late final FocusNode _titleFocus;
   bool _titleFocused = false;
@@ -484,10 +487,23 @@ class _JobDetailPageState extends State<JobDetailPage> {
 
   @override
   void dispose() {
+    _contentTabs?.dispose();
     _titleCtrl.dispose();
     _titleFocus.dispose();
     super.dispose();
   }
+
+  void _ensureContentTabs(bool hasAnalysis) {
+    final count = hasAnalysis ? 3 : 2;
+    if (_contentTabs != null && _contentTabs!.length == count) return;
+    _contentTabs?.dispose();
+    _contentTabs = TabController(length: count, vsync: this)
+      ..addListener(() {
+        if (!_contentTabs!.indexIsChanging) setState(() {});
+      });
+  }
+
+  bool get _onOriginalTab => _contentTabs?.index == 0;
 
   Job _withEditedTitle(Job job) {
     final t = _titleCtrl.text.trim();
@@ -727,6 +743,8 @@ class _JobDetailPageState extends State<JobDetailPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final hasAnalysis = job.hasAnalysis;
+    _ensureContentTabs(hasAnalysis);
+    final tabs = _contentTabs!;
     final scaffold = Scaffold(
       appBar: AppBar(
         title: Text(job.displayTitle),
@@ -767,14 +785,14 @@ class _JobDetailPageState extends State<JobDetailPage> {
               child: Text(S.analyze),
             ),
         ],
-        bottom: hasAnalysis
-            ? TabBar(
-                tabs: [
-                  Tab(text: S.tabSummary),
-                  Tab(text: S.tabOriginal),
-                ],
-              )
-            : null,
+        bottom: TabBar(
+          controller: tabs,
+          tabs: [
+            Tab(text: S.tabOriginal),
+            Tab(text: S.tabProposal),
+            if (hasAnalysis) Tab(text: S.tabSummary),
+          ],
+        ),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -881,61 +899,67 @@ class _JobDetailPageState extends State<JobDetailPage> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                SegmentedButton<bool>(
-                  segments: [
-                    ButtonSegment(
-                      value: false,
-                      label: Text(S.originalLangEn),
-                    ),
-                    ButtonSegment(
-                      value: true,
-                      label: Text(S.originalLangZh),
-                      enabled: _hasBodyZh(job),
-                    ),
-                  ],
-                  selected: {_originalInZh && _hasBodyZh(job)},
-                  onSelectionChanged: (sel) {
-                    final pickZh = sel.first;
-                    if (pickZh && !_hasBodyZh(job)) return;
-                    setState(() => _originalInZh = pickZh);
-                  },
-                ),
-                const SizedBox(width: 12),
-                if (!_hasBodyZh(job))
-                  TextButton.icon(
-                    onPressed: _translatingBody ? null : _translateBody,
-                    icon: _translatingBody
-                        ? SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          )
-                        : const Icon(Icons.translate, size: 20),
-                    label: Text(S.translateToZh),
+          if (_onOriginalTab)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  SegmentedButton<bool>(
+                    segments: [
+                      ButtonSegment(
+                        value: false,
+                        label: Text(S.originalLangEn),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        label: Text(S.originalLangZh),
+                        enabled: _hasBodyZh(job),
+                      ),
+                    ],
+                    selected: {_originalInZh && _hasBodyZh(job)},
+                    onSelectionChanged: (sel) {
+                      final pickZh = sel.first;
+                      if (pickZh && !_hasBodyZh(job)) return;
+                      setState(() => _originalInZh = pickZh);
+                    },
                   ),
-              ],
+                  const SizedBox(width: 12),
+                  if (!_hasBodyZh(job))
+                    TextButton.icon(
+                      onPressed: _translatingBody ? null : _translateBody,
+                      icon: _translatingBody
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            )
+                          : const Icon(Icons.translate, size: 20),
+                      label: Text(S.translateToZh),
+                    ),
+                ],
+              ),
             ),
-          ),
           Expanded(
-            child: _DetailMainWithReason(
-              job: job,
-              originalBody: _originalBodyText(job),
-              analyzing: _analyzing,
-              hasAnalysis: hasAnalysis,
+            child: TabBarView(
+              controller: tabs,
+              children: [
+                _DetailMainWithReason(
+                  job: job,
+                  originalBody: _originalBodyText(job),
+                ),
+                _ProposalDraftsTab(store: widget.store, jobId: job.id),
+                if (hasAnalysis)
+                  _SummaryTab(job: job, analyzing: _analyzing),
+              ],
             ),
           ),
         ],
       ),
     );
-    if (!hasAnalysis) return scaffold;
-    return DefaultTabController(length: 2, child: scaffold);
+    return scaffold;
   }
 
 }
@@ -944,14 +968,10 @@ class _DetailMainWithReason extends StatelessWidget {
   const _DetailMainWithReason({
     required this.job,
     required this.originalBody,
-    required this.analyzing,
-    required this.hasAnalysis,
   });
 
   final Job job;
   final String originalBody;
-  final bool analyzing;
-  final bool hasAnalysis;
 
   String? get _considerReason {
     if (job.status != ReadinessStatus.considering) return null;
@@ -959,17 +979,7 @@ class _DetailMainWithReason extends StatelessWidget {
     return t == null || t.isEmpty ? null : t;
   }
 
-  Widget _mainContent() {
-    if (hasAnalysis) {
-      return TabBarView(
-        children: [
-          _SummaryTab(job: job, analyzing: analyzing),
-          _OriginalTab(body: originalBody),
-        ],
-      );
-    }
-    return _OriginalTab(body: originalBody);
-  }
+  Widget _mainContent() => _OriginalTab(body: originalBody);
 
   @override
   Widget build(BuildContext context) {
@@ -986,6 +996,250 @@ class _DetailMainWithReason extends StatelessWidget {
             title: S.considerApplying,
             text: reason,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProposalDraftsTab extends StatefulWidget {
+  const _ProposalDraftsTab({required this.store, required this.jobId});
+
+  final JobStore store;
+  final String jobId;
+
+  @override
+  State<_ProposalDraftsTab> createState() => _ProposalDraftsTabState();
+}
+
+class _ProposalDraftsTabState extends State<_ProposalDraftsTab> {
+  List<ProposalDraft> _drafts = [];
+  ProposalDraft? _selected;
+  late final TextEditingController _title;
+  late final TextEditingController _body;
+  bool _loading = true;
+  bool _isNew = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController();
+    _body = TextEditingController();
+    _reload();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    setState(() => _loading = true);
+    _drafts = await widget.store.listProposalDrafts(widget.jobId);
+    setState(() => _loading = false);
+  }
+
+  void _selectDraft(ProposalDraft? draft, {bool isNew = false}) {
+    setState(() {
+      _selected = draft;
+      _isNew = isNew;
+      _title.text = draft?.title ?? defaultProposalTitle();
+      _body.text = draft?.body ?? '';
+    });
+  }
+
+  Future<void> _save() async {
+    final title = _title.text.trim();
+    final body = _body.text;
+    if (_isNew || _selected == null) {
+      final created = await widget.store.insertProposalDraft(
+        jobId: widget.jobId,
+        title: title,
+        body: body,
+      );
+      await _reload();
+      if (!mounted) return;
+      _selectDraft(
+        _drafts.where((d) => d.id == created.id).firstOrNull ?? created,
+      );
+      setState(() => _isNew = false);
+      return;
+    }
+    final id = _selected!.id;
+    await widget.store.saveProposalDraft(
+      _selected!.copyWith(title: title, body: body),
+    );
+    await _reload();
+    if (!mounted) return;
+    _selectDraft(_drafts.firstWhere((d) => d.id == id));
+  }
+
+  Future<void> _delete() async {
+    final id = _selected?.id;
+    if (id == null && !_isNew) return;
+    if (!_isNew) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(S.deleteProposalDraft),
+          content: Text(S.deleteProposalDraftConfirm),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(S.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(S.delete),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      await widget.store.deleteProposalDraft(id!);
+    }
+    await _reload();
+    if (!mounted) return;
+    setState(() {
+      _selected = null;
+      _isNew = false;
+      _title.clear();
+      _body.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final editing = _selected != null || _isNew;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: 220,
+          child: Material(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => _selectDraft(null, isNew: true),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text(S.newProposalDraft),
+                  ),
+                ),
+                Expanded(
+                  child: _drafts.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            S.proposalDraftEmpty,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _drafts.length,
+                          itemBuilder: (ctx, i) {
+                            final d = _drafts[i];
+                            final selected = _selected?.id == d.id && !_isNew;
+                            return ListTile(
+                              selected: selected,
+                              title: Text(
+                                d.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                d.body.trim().isEmpty
+                                    ? '—'
+                                    : d.body.trim().split('\n').first,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => _selectDraft(d),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: editing
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _title,
+                        decoration: InputDecoration(
+                          labelText: S.proposalDraftTitle,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _body,
+                          maxLines: null,
+                          expands: true,
+                          textAlignVertical: TextAlignVertical.top,
+                          decoration: InputDecoration(
+                            labelText: S.proposalDraftBody,
+                            alignLabelWithHint: true,
+                            border: const OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton(
+                            onPressed: _save,
+                            child: Text(S.saveProposalDraft),
+                          ),
+                          OutlinedButton(
+                            onPressed: _delete,
+                            child: Text(S.deleteProposalDraft),
+                          ),
+                          TextButton.icon(
+                            onPressed: () async {
+                              await Clipboard.setData(
+                                ClipboardData(text: _body.text),
+                              );
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(S.copiedSnack)),
+                              );
+                            },
+                            icon: const Icon(Icons.copy, size: 18),
+                            label: Text(S.copyProposalDraft),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                )
+              : Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      S.proposalDraftEmpty,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
         ),
       ],
     );
