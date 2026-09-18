@@ -185,6 +185,19 @@ class _InboxPageState extends State<InboxPage>
     await _reload();
   }
 
+  Future<void> _openJobOnUpwork(Job job) async {
+    final url = jobUpworkLink(job);
+    if (url == null) return;
+    try {
+      await openSearchInBrowser(url);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.openSearchFailed(e))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tab = _InboxTab.values[_inboxTabs.index];
@@ -278,6 +291,12 @@ class _InboxPageState extends State<InboxPage>
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            if (jobUpworkLink(job) != null)
+                              IconButton(
+                                icon: const Icon(Icons.open_in_new),
+                                tooltip: S.openOnUpwork,
+                                onPressed: () => _openJobOnUpwork(job),
+                              ),
                             IconButton(
                               icon: Icon(
                                 job.bookmarked
@@ -449,6 +468,8 @@ class JobDetailPage extends StatefulWidget {
 class _JobDetailPageState extends State<JobDetailPage> {
   Job? _job;
   bool _analyzing = false;
+  bool _translatingBody = false;
+  bool _originalInZh = false;
   late final TextEditingController _titleCtrl;
   late final FocusNode _titleFocus;
   bool _titleFocused = false;
@@ -619,6 +640,49 @@ class _JobDetailPageState extends State<JobDetailPage> {
     return true;
   }
 
+  String _originalBodyText(Job job) {
+    final zh = job.bodyZh?.trim();
+    if (_originalInZh && zh != null && zh.isNotEmpty) return zh;
+    return job.body;
+  }
+
+  bool _hasBodyZh(Job job) {
+    final zh = job.bodyZh?.trim();
+    return zh != null && zh.isNotEmpty;
+  }
+
+  Future<void> _translateBody() async {
+    final job = _job;
+    if (job == null) return;
+    if (_hasBodyZh(job)) {
+      setState(() => _originalInZh = true);
+      return;
+    }
+    if (!await _ensureOllamaModel()) return;
+    setState(() => _translatingBody = true);
+    try {
+      final zh = await translatePostingToZh(
+        baseUrl: widget.settings.ollamaBaseUrl,
+        model: widget.settings.ollamaModel,
+        body: job.body,
+      );
+      await widget.store.save(_withEditedTitle(job).copyWith(bodyZh: zh));
+      if (!mounted) return;
+      setState(() {
+        _translatingBody = false;
+        _originalInZh = true;
+      });
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _translatingBody = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(S.translateFailed(e))),
+        );
+      }
+    }
+  }
+
   Future<void> _analyze() async {
     final job = _job;
     if (job == null) return;
@@ -772,14 +836,97 @@ class _JobDetailPageState extends State<JobDetailPage> {
                 ],
                 if (job.sourceUrl != null) ...[
                   const SizedBox(height: 8),
-                  SelectableText('${S.link}: ${job.sourceUrl}'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText('${S.link}: ${job.sourceUrl}'),
+                      ),
+                      if (jobUpworkLink(job) != null)
+                        IconButton(
+                          icon: const Icon(Icons.open_in_new),
+                          tooltip: S.openOnUpwork,
+                          onPressed: () async {
+                            try {
+                              await openSearchInBrowser(jobUpworkLink(job)!);
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(S.openSearchFailed(e))),
+                              );
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ] else if (jobUpworkLink(job) != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        try {
+                          await openSearchInBrowser(jobUpworkLink(job)!);
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(S.openSearchFailed(e))),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.open_in_new),
+                      label: Text(S.openOnUpwork),
+                    ),
+                  ),
                 ],
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                SegmentedButton<bool>(
+                  segments: [
+                    ButtonSegment(
+                      value: false,
+                      label: Text(S.originalLangEn),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      label: Text(S.originalLangZh),
+                      enabled: _hasBodyZh(job),
+                    ),
+                  ],
+                  selected: {_originalInZh && _hasBodyZh(job)},
+                  onSelectionChanged: (sel) {
+                    final pickZh = sel.first;
+                    if (pickZh && !_hasBodyZh(job)) return;
+                    setState(() => _originalInZh = pickZh);
+                  },
+                ),
+                const SizedBox(width: 12),
+                if (!_hasBodyZh(job))
+                  TextButton.icon(
+                    onPressed: _translatingBody ? null : _translateBody,
+                    icon: _translatingBody
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          )
+                        : const Icon(Icons.translate, size: 20),
+                    label: Text(S.translateToZh),
+                  ),
               ],
             ),
           ),
           Expanded(
             child: _DetailMainWithReason(
               job: job,
+              originalBody: _originalBodyText(job),
               analyzing: _analyzing,
               hasAnalysis: hasAnalysis,
             ),
@@ -796,11 +943,13 @@ class _JobDetailPageState extends State<JobDetailPage> {
 class _DetailMainWithReason extends StatelessWidget {
   const _DetailMainWithReason({
     required this.job,
+    required this.originalBody,
     required this.analyzing,
     required this.hasAnalysis,
   });
 
   final Job job;
+  final String originalBody;
   final bool analyzing;
   final bool hasAnalysis;
 
@@ -815,11 +964,11 @@ class _DetailMainWithReason extends StatelessWidget {
       return TabBarView(
         children: [
           _SummaryTab(job: job, analyzing: analyzing),
-          _OriginalTab(body: job.body),
+          _OriginalTab(body: originalBody),
         ],
       );
     }
-    return _OriginalTab(body: job.body);
+    return _OriginalTab(body: originalBody);
   }
 
   @override

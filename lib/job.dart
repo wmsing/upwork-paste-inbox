@@ -49,11 +49,29 @@ bool looksLikeUrl(String s) {
   return t.startsWith('http://') || t.startsWith('https://');
 }
 
+final _upworkJobUrlInText = RegExp(
+  r'https?://(?:www\.)?upwork\.com/(?:nx/)?jobs/[^\s)\]>"]+',
+  caseSensitive: false,
+);
+
+String? upworkJobUrlFromPosting(String body) {
+  final m = _upworkJobUrlInText.firstMatch(body);
+  return m?.group(0);
+}
+
+/// Saved source URL, or first Upwork job link found in the posting body.
+String? jobUpworkLink(Job job) {
+  final saved = job.sourceUrl?.trim();
+  if (saved != null && saved.isNotEmpty && looksLikeUrl(saved)) return saved;
+  return upworkJobUrlFromPosting(job.body);
+}
+
 class Job {
   Job({
     required this.id,
     required this.displayTitle,
     required this.body,
+    this.bodyZh,
     this.sourceUrl,
     required this.fingerprint,
     required this.status,
@@ -74,6 +92,7 @@ class Job {
   final String id;
   final String displayTitle;
   final String body;
+  final String? bodyZh;
   final String? sourceUrl;
   final String fingerprint;
   final ReadinessStatus status;
@@ -103,6 +122,7 @@ class Job {
       id: row['id']! as String,
       displayTitle: row['display_title']! as String,
       body: row['body']! as String,
+      bodyZh: row['body_zh'] as String?,
       sourceUrl: row['source_url'] as String?,
       fingerprint: row['fingerprint']! as String,
       status: readinessFromDb(row['status']! as String),

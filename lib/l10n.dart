@@ -39,6 +39,7 @@ abstract final class S {
   static final unbookmark = bi('Remove bookmark', '取消收藏');
   static final emptyTab = bi('Nothing in this tab', '此分类暂无职位');
   static final link = bi('Link', '链接');
+  static final openOnUpwork = bi('Open on Upwork', '在 Upwork 打开');
   static const analyzeSetupIntro =
       'Analyze uses your local Ollama to:\n'
       '• Key facts first (Connects, hours, pay, competition, client)\n'
@@ -53,6 +54,11 @@ abstract final class S {
   static final summaryEn = bi('Summary (EN)', 'English summary');
   static final match = bi('Match', '匹配');
   static final original = bi('Original text', '原文');
+  static final originalLangEn = bi('EN', '英文');
+  static final originalLangZh = bi('ZH', '中文');
+  static final translateToZh = bi('Translate to 中文', '翻译成中文');
+  static String translateFailed(Object e) =>
+      bi('Translation failed: $e', '翻译失败: $e');
   static final tabSummary = bi('Summary', '摘要');
   static final tabOriginal = bi('Original', '原文');
   static final summaryEmpty =

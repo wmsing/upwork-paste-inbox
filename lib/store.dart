@@ -22,13 +22,14 @@ class JobStore {
     final db = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onCreate: (db, _) async {
           await db.execute('''
             CREATE TABLE jobs (
               id TEXT PRIMARY KEY,
               display_title TEXT NOT NULL,
               body TEXT NOT NULL,
+              body_zh TEXT,
               source_url TEXT,
               fingerprint TEXT NOT NULL UNIQUE,
               status TEXT NOT NULL,
@@ -58,6 +59,9 @@ class JobStore {
           }
           if (oldVersion < 4) {
             await db.execute('ALTER TABLE jobs ADD COLUMN consider_note TEXT');
+          }
+          if (oldVersion < 5) {
+            await db.execute('ALTER TABLE jobs ADD COLUMN body_zh TEXT');
           }
         },
       ),
@@ -137,6 +141,7 @@ class JobStore {
         'id': job.id,
         'display_title': job.displayTitle,
         'body': job.body,
+        'body_zh': job.bodyZh,
         'source_url': job.sourceUrl,
         'fingerprint': job.fingerprint,
         'status': job.status.name,
@@ -160,6 +165,7 @@ class JobStore {
 extension JobCopy on Job {
   Job copyWith({
     String? displayTitle,
+    String? bodyZh,
     ReadinessStatus? status,
     bool? bookmarked,
     SkipPreset? skipPreset,
@@ -180,6 +186,7 @@ extension JobCopy on Job {
       id: id,
       displayTitle: displayTitle ?? this.displayTitle,
       body: body,
+      bodyZh: bodyZh ?? this.bodyZh,
       sourceUrl: sourceUrl,
       fingerprint: fingerprint,
       status: status ?? this.status,

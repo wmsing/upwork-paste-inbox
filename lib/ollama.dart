@@ -117,3 +117,37 @@ match_tier: strong = clear Flutter maintenance/ongoing; maybe = partial/unclear;
     reasons: reasons,
   );
 }
+
+Future<String> translatePostingToZh({
+  required String baseUrl,
+  required String model,
+  required String body,
+}) async {
+  final base =
+      baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  final uri = Uri.parse('$base/v1/chat/completions');
+  const system = '''
+Translate the user's Upwork job posting from English to Simplified Chinese (简体中文).
+Keep line breaks and section structure. Do not add commentary.
+Reply with the translation only, no markdown fences.
+''';
+  final res = await http.post(
+    uri,
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({
+      'model': model,
+      'stream': false,
+      'messages': [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': body},
+      ],
+    }),
+  );
+  if (res.statusCode != 200) {
+    throw StateError('Ollama ${res.statusCode}: ${res.body}');
+  }
+  final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+  final content =
+      (decoded['choices'] as List).first['message']['content'] as String;
+  return normalizeModelNewlines(content).trim();
+}
