@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 import 'l10n.dart';
+import 'posting_clean.dart';
 
-enum ReadinessStatus { unread, read, applied, skipped }
+enum ReadinessStatus { unread, read, applied, considering, skipped }
 
 enum SkipPreset { notFlutter, budget, timezone, closed, other }
 
@@ -30,6 +31,7 @@ bool isPoorTitleLine(String line) {
   if (looksLikeUrl(t)) return true;
   // Upwork copy often starts with "___" or dash rules before the job title.
   if (RegExp(r'^[_\-–—·•=\s]+$').hasMatch(t)) return true;
+  if (isUpworkPasteCrumb(t)) return true;
   return false;
 }
 
@@ -55,8 +57,10 @@ class Job {
     this.sourceUrl,
     required this.fingerprint,
     required this.status,
+    this.bookmarked = false,
     this.skipPreset,
     this.skipNote,
+    this.considerNote,
     this.summaryEn,
     this.summaryZh,
     this.matchTier,
@@ -73,8 +77,10 @@ class Job {
   final String? sourceUrl;
   final String fingerprint;
   final ReadinessStatus status;
+  final bool bookmarked;
   final SkipPreset? skipPreset;
   final String? skipNote;
+  final String? considerNote;
   final String? summaryEn;
   final String? summaryZh;
   final MatchTier? matchTier;
@@ -100,8 +106,10 @@ class Job {
       sourceUrl: row['source_url'] as String?,
       fingerprint: row['fingerprint']! as String,
       status: readinessFromDb(row['status']! as String),
+      bookmarked: (row['bookmarked'] as int? ?? 0) != 0,
       skipPreset: skipPresetFromDb(row['skip_preset'] as String?),
       skipNote: row['skip_note'] as String?,
+      considerNote: row['consider_note'] as String?,
       summaryEn: row['summary_en'] as String?,
       summaryZh: row['summary_zh'] as String?,
       matchTier: matchTierFromDb(row['match_tier'] as String?),
@@ -131,6 +139,8 @@ class Job {
         return bi('Read', '已读');
       case ReadinessStatus.applied:
         return bi('Applied', '已投');
+      case ReadinessStatus.considering:
+        return bi('Consider applying', '可考虑投');
       case ReadinessStatus.skipped:
         return bi('Skipped', '跳过');
     }

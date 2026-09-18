@@ -22,7 +22,7 @@ class JobStore {
     final db = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 4,
         onCreate: (db, _) async {
           await db.execute('''
             CREATE TABLE jobs (
@@ -32,8 +32,10 @@ class JobStore {
               source_url TEXT,
               fingerprint TEXT NOT NULL UNIQUE,
               status TEXT NOT NULL,
+              bookmarked INTEGER NOT NULL DEFAULT 0,
               skip_preset TEXT,
               skip_note TEXT,
+              consider_note TEXT,
               summary_en TEXT,
               summary_zh TEXT,
               match_tier TEXT,
@@ -48,6 +50,14 @@ class JobStore {
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
             await db.execute('ALTER TABLE jobs ADD COLUMN key_facts TEXT');
+          }
+          if (oldVersion < 3) {
+            await db.execute(
+              'ALTER TABLE jobs ADD COLUMN bookmarked INTEGER NOT NULL DEFAULT 0',
+            );
+          }
+          if (oldVersion < 4) {
+            await db.execute('ALTER TABLE jobs ADD COLUMN consider_note TEXT');
           }
         },
       ),
@@ -130,8 +140,10 @@ class JobStore {
         'source_url': job.sourceUrl,
         'fingerprint': job.fingerprint,
         'status': job.status.name,
+        'bookmarked': job.bookmarked ? 1 : 0,
         'skip_preset': job.skipPreset?.name,
         'skip_note': job.skipNote,
+        'consider_note': job.considerNote,
         'summary_en': job.summaryEn,
         'summary_zh': job.summaryZh,
         'match_tier': job.matchTier?.name,
@@ -149,8 +161,10 @@ extension JobCopy on Job {
   Job copyWith({
     String? displayTitle,
     ReadinessStatus? status,
+    bool? bookmarked,
     SkipPreset? skipPreset,
     String? skipNote,
+    String? considerNote,
     String? summaryEn,
     String? summaryZh,
     MatchTier? matchTier,
@@ -159,6 +173,7 @@ extension JobCopy on Job {
     DateTime? analyzedAt,
     DateTime? updatedAt,
     bool clearSkip = false,
+    bool clearConsider = false,
     bool clearAnalysis = false,
   }) {
     return Job(
@@ -168,8 +183,11 @@ extension JobCopy on Job {
       sourceUrl: sourceUrl,
       fingerprint: fingerprint,
       status: status ?? this.status,
+      bookmarked: bookmarked ?? this.bookmarked,
       skipPreset: clearSkip ? null : (skipPreset ?? this.skipPreset),
       skipNote: clearSkip ? null : (skipNote ?? this.skipNote),
+      considerNote:
+          clearConsider ? null : (considerNote ?? this.considerNote),
       summaryEn: clearAnalysis ? null : (summaryEn ?? this.summaryEn),
       summaryZh: clearAnalysis ? null : (summaryZh ?? this.summaryZh),
       matchTier: clearAnalysis ? null : (matchTier ?? this.matchTier),

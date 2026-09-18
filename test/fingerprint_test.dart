@@ -22,4 +22,13 @@ void main() {
       'Senior Flutter Developer',
     );
   });
+
+  test('default title skips open in new window crumb', () {
+    expect(
+      defaultDisplayTitle(
+        'Open job in a new window\nSenior Flutter Developer',
+      ),
+      'Senior Flutter Developer',
+    );
+  });
 }

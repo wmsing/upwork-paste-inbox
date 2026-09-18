@@ -24,11 +24,116 @@ bool startsNoiseTail(String trimmedLine) {
 
 bool isNoiseLine(String trimmedLine) {
   if (trimmedLine.isEmpty) return false;
+  if (isUpworkPasteCrumb(trimmedLine)) return true;
+  if (isContractToHireNoise(trimmedLine)) return true;
   for (final re in _dropLine) {
     if (re.hasMatch(trimmedLine)) return true;
   }
   return false;
 }
+
+/// Upwork contract-to-hire explainer block (noise in paste and original view).
+bool isContractToHireNoise(String trimmedLine) {
+  if (trimmedLine.isEmpty) return false;
+  final lower = trimmedLine.toLowerCase();
+  if (lower.startsWith('contract-to-hire opportunity')) return true;
+  if (lower.startsWith(
+    'this lets talent know that this job could become full time',
+  )) {
+    return true;
+  }
+  if (lower == 'learn more') return true;
+  return false;
+}
+
+const _postingSectionHeaders = [
+  'Summary',
+  'Scope',
+  'Important',
+  'Requirements',
+  'Expert',
+  'Project Type',
+  'Skills and Expertise',
+  'Activity on this job',
+  'Bid range',
+  'Proposals',
+  'Interviewing',
+  'Invites sent',
+  'Available Connects',
+  'About the client',
+  'Job link',
+];
+
+const _postingSectionPrefixHeaders = [
+  'Send a proposal for',
+];
+
+bool isPostingSectionHeader(String trimmedLine) {
+  if (trimmedLine.isEmpty) return false;
+  final lower = trimmedLine.toLowerCase();
+  for (final h in _postingSectionHeaders) {
+    final hl = h.toLowerCase();
+    if (lower == hl || lower == '$hl:') return true;
+  }
+  for (final p in _postingSectionPrefixHeaders) {
+    if (lower.startsWith(p.toLowerCase())) return true;
+  }
+  return false;
+}
+
+class OriginalLine {
+  const OriginalLine(
+    this.text, {
+    this.isSectionHeader = false,
+    this.gapBefore = false,
+  });
+
+  final String text;
+  final bool isSectionHeader;
+  /// Extra space when a section header follows a blank line in the paste.
+  final bool gapBefore;
+}
+
+/// Lines for the Original tab: drops C2H boilerplate; marks section headers.
+List<OriginalLine> originalDisplayLines(String body) {
+  final out = <OriginalLine>[];
+  for (final line in body.split('\n')) {
+    final t = line.trim();
+    if (t.isEmpty) {
+      out.add(const OriginalLine(''));
+      continue;
+    }
+    if (isContractToHireNoise(t)) continue;
+    final isHeader = isPostingSectionHeader(t);
+    var gapBefore = false;
+    if (isHeader && out.isNotEmpty && out.last.text.isEmpty) {
+      gapBefore = true;
+      out.removeLast();
+    }
+    out.add(
+      OriginalLine(
+        t,
+        isSectionHeader: isHeader,
+        gapBefore: gapBefore,
+      ),
+    );
+  }
+  while (out.isNotEmpty && out.last.text.isEmpty) {
+    out.removeLast();
+  }
+  return out;
+}
+
+/// One-line Upwork job page actions that appear above the title in ⌘A copy.
+bool isUpworkPasteCrumb(String trimmedLine) {
+  if (trimmedLine.isEmpty) return false;
+  return _upworkActionCrumb.hasMatch(trimmedLine);
+}
+
+final _upworkActionCrumb = RegExp(
+  r'^(open\b.*\bnew window|copy link|save job\b)',
+  caseSensitive: false,
+);
 
 // ponytail: heuristic list; extend when new Upwork UI crumbs show up in paste
 final _tailStart = [

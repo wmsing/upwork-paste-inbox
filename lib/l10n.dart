@@ -33,6 +33,11 @@ abstract final class S {
   static final copiedSnack =
       bi('Copied to clipboard', '已复制到剪贴板');
   static final listTitle = bi('List title', '列表标题');
+  static final saveTitle = bi('Save title', '保存标题');
+  static final tabBookmarked = bi('Bookmarked', '收藏');
+  static final bookmark = bi('Bookmark', '收藏');
+  static final unbookmark = bi('Remove bookmark', '取消收藏');
+  static final emptyTab = bi('Nothing in this tab', '此分类暂无职位');
   static final link = bi('Link', '链接');
   static const analyzeSetupIntro =
       'Analyze uses your local Ollama to:\n'
@@ -54,10 +59,52 @@ abstract final class S {
       bi('Tap Analyze to generate summary', '点「分析」生成摘要');
   static final skipReason = bi('Skip reason', '跳过原因');
   static final skipNote = bi('Note (optional)', '备注（可选）');
+  static final considerApplying = bi('Consider applying', '可考虑投');
+  static final considerReason = bi('Reason (optional)', '原因（可选）');
+  static String considerLine(String? note) {
+    final base = bi('Consider applying', '可考虑投');
+    if (note != null && note.isNotEmpty) return '$base — $note';
+    return base;
+  }
   static final ok = bi('OK', '确定');
   static final save = bi('Save', '保存');
   static final modelName = bi('Model name', '模型名');
   static final ollamaBaseUrl = bi('Ollama Base URL', 'Ollama 地址');
+  static final savedSearches = bi('Saved search', '已存搜索');
+  static final savedSearchHint = bi(
+    'Open your Upwork job search in the browser (logged in)',
+    '在浏览器打开你的 Upwork 职位搜索（使用已登录会话）',
+  );
+  static final savedSearchesEmpty = bi(
+    'No search link saved yet.\nTap below to paste a URL from Upwork Find Work.',
+    '还没有保存搜索链接。\n点下方按钮粘贴 Upwork 筛选页链接。',
+  );
+  static final savedSearchUrl = bi('Search URL', '搜索链接');
+  static final saveSearchLink = bi('Save search link', '保存搜索链接');
+  static final updateSearchLink = bi('Update search link', '更新搜索链接');
+  static final openSavedSearch = bi('Open in browser', '在浏览器打开');
+  static final removeSavedSearch = bi('Remove search link', '移除搜索链接');
+  static final removeSavedSearchBody = bi(
+    'Remove the saved Upwork search link from this app.',
+    '将从本应用移除已保存的 Upwork 搜索链接。',
+  );
+  static String openSearchFailed(Object e) =>
+      bi('Could not open link: $e', '无法打开链接: $e');
+  static final clearPrefs = bi('Clear app preferences', '清除应用偏好');
+  static final clearPrefsTitle =
+      bi('Clear preferences?', '清除偏好数据？');
+  static final clearPrefsBody = bi(
+    'Clears your saved search link and Ollama settings. '
+    'Jobs already in your inbox are kept.',
+    '将清除已存搜索链接与 Ollama 设置。收件箱里已保存的职位不会删除。',
+  );
+  static final clearPrefsHint = bi(
+    'Restore saved search link and Ollama settings to defaults.',
+    '将已存搜索链接与 Ollama 设置恢复为默认状态。',
+  );
+  static final clearPrefsConfirm = bi('Clear', '清除');
+  static final clearPrefsDone =
+      bi('Preferences cleared', '偏好数据已清除');
   static String analyzeFailed(Object e) =>
       bi('Analysis failed: $e', '分析失败: $e');
   static String skipLine(String preset, String? note) {
