@@ -27,6 +27,14 @@ Paste Upwork job details from the browser into a private inbox: dedupe, track st
 |:---:|
 | ![Settings](docs/screenshot-5-settings.png) |
 
+## Install (no Flutter needed)
+
+Download **`Upwork-Paste-Inbox-macos-unsigned.zip`** from [GitHub Releases](https://github.com/wmsing/upwork-paste-inbox/releases), unzip, drag **Upwork Paste Inbox.app** to **Applications**.
+
+First open: right-click the app → **Open** (unsigned build; no Apple notarization). You still need **Ollama** running locally.
+
+Maintainers: push tag `v0.1.0` (or run **Actions → macOS build → Run workflow**) to publish a new zip.
+
 ## Quick start
 
 **Requirements:** macOS, [Ollama](https://ollama.com/) running (`http://127.0.0.1:11434`).
